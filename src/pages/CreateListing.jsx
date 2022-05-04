@@ -6,6 +6,7 @@ import{toast} from 'react-toastify'
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import {db} from '../firebase.config'
 import {v4 as uuidv4} from 'uuid'
+import {addDoc, collection, serverTimestamp} from 'firebase/firestore'
 
 
 function CreateListing() {
@@ -66,27 +67,31 @@ function CreateListing() {
     let geolocation = {}
     let location
 
-    // if(geolocationEnabled){
-      // const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${process.env.REACT_APP_GEOCODE_API_KEY="A key"}`)
+     if(geolocationEnabled){
+       const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${process.env.REACT_APP_GEOCODE_API_KEY}`)
 
-      // geolocation.lat = data.results[0]?.geometry.location.lat ?? 0
+       const data = await response.json
 
-      // geolocation.lng = data.results[0]?.geometry.location.lng ?? 0
+       geolocation.lat = data.results[0]?.geometry.location.lat ?? 0
 
-      // location = data.status === 'ZERO_RESULTS' ? undefined : data.results[0]?.formatted_address
-      // console.log(data)
+       geolocation.lng = data.results[0]?.geometry.location.lng ?? 0
 
-      // if(location === undefined || location.includes('undefined')){
-      //   setLoading(false)
-      //   toast.error('Please enter a correct address')
-      //   return
-      // }
-    // }else{
+       location = 
+        data.status === 'ZERO_RESULTS' 
+        ? undefined : data.results[0]?.formatted_address
+        console.log(data)
+
+       if(location === undefined || location.includes('undefined')){
+         setLoading(false)
+         toast.error('Please enter a correct address')
+         return
+       }
+     }else{
       geolocation.lat = latitude
       geolocation.lng = longitude
       location = address
       console.log(geolocation, location)
-    // }
+     }
 
     const storeImage = async (image) => {
       return new Promise((resolve, reject) => {
@@ -135,7 +140,22 @@ function CreateListing() {
       toast.error('Images not uploaded')
       return
     })
-    console.log(imgUrls)
+    const formDataCopy = {
+      ...formData,
+      imgUrls,
+      geolocation,
+      timestamp: serverTimestamp()
+    }
+
+    formDataCopy.location = address
+    delete formDataCopy.images
+    delete formDataCopy.address
+    !formDataCopy.offer && delete formDataCopy.discountedPrice 
+
+    const docRef = await addDoc(collection(db, 'listings'), formDataCopy)
+    setLoading(false)
+    toast.success('Listing created')
+    navigate(`/category/${formDataCopy.type}/${docRef.id}`)
 
     setLoading(false)
   }
@@ -265,19 +285,6 @@ function CreateListing() {
           <div className='formButtons'>
             <button
               className={furnished ? 'formButtonActive' : 'formButton'}
-              type='button'
-              id='furnished'
-              value={true}
-              onClick={onMutate}
-            >
-              Yes
-            </button>
-            <button
-              className={
-                !furnished && furnished !== null
-                  ? 'formButtonActive'
-                  : 'formButton'
-              }
               type='button'
               id='furnished'
               value={false}
